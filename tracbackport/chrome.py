@@ -74,10 +74,13 @@ from trac.util.datefmt import (
     get_first_week_day_jquery_ui, get_timepicker_separator_jquery_ui,
     get_period_names_jquery_ui, localtz)
 from trac.util.translation import _, get_available_locales
-from trac.web.api import IRequestHandler, ITemplateStreamFilter, HTTPNotFound
+from trac.web.api import IRequestHandler, HTTPNotFound
 from trac.web.href import Href
 from trac.wiki import IWikiSyntaxProvider
 from trac.wiki.formatter import format_to, format_to_html, format_to_oneliner
+
+from trac.web import chrome as chrome_origin
+from .api import ITemplateStreamFilter
 
 default_mainnav_order = ('wiki', 'timeline', 'roadmap', 'browser',
                          'tickets', 'newticket', 'search', 'admin')
@@ -438,8 +441,8 @@ class Chrome(Component):
     required = True
     is_valid_default_handler = False
 
-    navigation_contributors = ExtensionPoint(INavigationContributor)
-    template_providers = ExtensionPoint(ITemplateProvider)
+    navigation_contributors = ExtensionPoint(chrome_origin.INavigationContributor)
+    template_providers = ExtensionPoint(chrome_origin.ITemplateProvider)
     stream_filters = ExtensionPoint(ITemplateStreamFilter)  # TODO (1.5.1): del
 
     shared_templates_dir = PathOption('inherit', 'templates_dir', '',
@@ -502,7 +505,7 @@ class Chrome(Component):
         http://ajax.aspnetcdn.com/ajax/jQuery/jquery-%(version)s.min.js or
         https://ajax.googleapis.com/ajax/libs/jquery/%(version)s/jquery.min.js.
 
-        (''since 1.0'')""", doc_args={'version': '1.12.4'})
+        (''since 1.0'')""", doc_args={'version': '3.6.3'})
 
     jquery_ui_location = Option('trac', 'jquery_ui_location', '',
         """Location of the jQuery UI !JavaScript library (version %(version)s).
@@ -514,7 +517,7 @@ class Chrome(Component):
         or
         http://ajax.aspnetcdn.com/ajax/jquery.ui/%(version)s/jquery-ui.min.js.
 
-        (''since 1.0'')""", doc_args={'version': '1.12.1'})
+        (''since 1.0'')""", doc_args={'version': '1.13.0'})
 
     jquery_ui_theme_location = Option('trac', 'jquery_ui_theme_location', '',
         """Location of the theme to be used with the jQuery UI !JavaScript
@@ -529,7 +532,7 @@ class Chrome(Component):
         or
         http://ajax.aspnetcdn.com/ajax/jquery.ui/%(version)s/themes/start/jquery-ui.css.
 
-        (''since 1.0'')""", doc_args={'version': '1.12.1'})
+        (''since 1.0'')""", doc_args={'version': '1.13.0'})
 
     mainnav = ConfigSection('mainnav', """Configures the main navigation bar,
         which by default contains //Wiki//, //Timeline//, //Roadmap//,
@@ -707,7 +710,7 @@ class Chrome(Component):
         def write_sample_template(filename, kind, example=''):
             site_path = os.path.join(self.env.templates_dir,
                                      filename + '.sample')
-            with open(site_path, 'w') as fileobj:
+            with open(site_path, 'w', encoding='utf-8') as fileobj:
                 fileobj.write("""\
 {#  This file allows customizing the appearance of the Trac installation.
 
@@ -1321,7 +1324,7 @@ class Chrome(Component):
             'authorinfo_short': self.authorinfo_short,
             'format_author': partial(self.format_author, req),
             'format_emails': self.format_emails,
-            'get_systeminfo': self.env.get_systeminfo,  # TODO (1.5.1) remove
+            'get_systeminfo': self.env.get_system_info,  # TODO (1.5.1) remove
             'captioned_button': partial(presentation.captioned_button, req),
             'accesskey': accesskey_attr,
 
@@ -1398,7 +1401,7 @@ class Chrome(Component):
             )
             self.jenv.globals.update(self._default_context_data.copy())
             self.jenv.globals.update(translation.functions)
-            self.jenv.globals.update(str=to_unicode)
+            self.jenv.globals.update(unicode=to_unicode)
             presentation.jinja2_update(self.jenv)
             self.jenv_text = self.jenv.overlay(autoescape=False)
         return (self.jenv_text if text else self.jenv).get_template(filename)
@@ -1580,7 +1583,7 @@ class Chrome(Component):
         If you don't need that and don't want the overhead, use
         `load_template` and `render_template_string` directly.
 
-        :rtype: the generated output is an `unicode` string if *text*
+        :rtype: the generated output is a `str` string if *text*
                 is ``True``, or a `Markup` string otherwise.
 
         See also `generate_fragment`, which produces an output
@@ -1614,7 +1617,7 @@ class Chrome(Component):
         if domain:
             symbols = list(translation.functions)
             domain_functions = translation.domain_functions(domain, symbols)
-            data.update(dict(list(zip(symbols, domain_functions))))
+            data.update(dict(zip(symbols, domain_functions)))
         data = self.populate_data(req, data)
         return template, data
 
@@ -1622,7 +1625,7 @@ class Chrome(Component):
                                  iterable=None):
         """Returns the rendered template in a form that can be "sent".
 
-        This will be either a single UTF-8 encoded `str` object, or an
+        This will be either a single UTF-8 encoded `btyes` object, or an
         iterable made of chunks of the above.
 
         :param template: the Jinja2 template
@@ -1632,11 +1635,11 @@ class Chrome(Component):
                      not be sanitized (see `valid_html_bytes`).
 
         :param iterable: determine whether the output should be
-                         generated in chunks or as a single `str`; if
+                         generated in chunks or as a single `btyes`; if
                          `None`, the `use_chunked_encoding` property
                          will be used to determine this instead
 
-        :rtype: `str` or an iterable of `str`, depending on *iterable*
+        :rtype: `btyes` or an iterable of `btyes`, depending on *iterable*
 
         .. note:
 
@@ -1662,7 +1665,7 @@ class Chrome(Component):
             return b''.join(generate())
 
     def render_template_string(self, template, data, text=False):
-        """Renders the template as an unicode or Markup string.
+        """Renders the template as a str or Markup string.
 
         :param template: the Jinja2 template
         :type template: ``jinja2.Template``
@@ -1670,7 +1673,7 @@ class Chrome(Component):
         :param text: in text mode (``True``) the generated string
                      will not be wrapped in `Markup`
 
-        :rtype: `unicode` if *text* is ``True``, `Markup` otherwise.
+        :rtype: `str` if *text* is ``True``, `Markup` otherwise.
 
         .. note:
 
@@ -1684,7 +1687,7 @@ class Chrome(Component):
         return string if text else Markup(string)
 
     def iterable_content(self, stream, text=False, **kwargs):
-        """Generate an iterable object which iterates `str` instances
+        """Generate an iterable object which iterates `btyes` instances
         from the given stream instance.
 
         :param text: in text mode (``True``) XML/HTML auto-escape of
@@ -1728,7 +1731,7 @@ class Chrome(Component):
         def _load_genshi_template(self, filename, method=None):
             if not self.templates:
                 genshi_dirs = [
-                    pkg_resources.resource_filename('trac', 'templates/genshi')
+                    pkg_resources.resource_filename('tracbackport', 'templates/genshi')
                 ] + self.get_all_templates_dirs()
                 self.templates = TemplateLoader(
                     genshi_dirs,

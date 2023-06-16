@@ -25,6 +25,7 @@ setup(name='TracBackport',
       license='BSD 3-Clause',
       packages=find_packages(exclude=['ez_setup', 'examples', 'tests']),
       include_package_data=True,
+      package_data={'trachours': ['templates/*', 'templates/genshi/*']},
       zip_safe=False,
       install_requires=['Trac', 'Genshi'],
       entry_points="""
