@@ -36,7 +36,7 @@ import re
 from functools import partial
 
 # Legacy Genshi support
-import genshi
+from .html import genshi
 if genshi:
     from genshi.core import Attrs, START
     from genshi.filters import Translator
