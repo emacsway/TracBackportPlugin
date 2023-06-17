@@ -21,10 +21,14 @@
 import io
 import re
 import sys
-from HTMLParser import HTMLParser
-import htmlentitydefs as entities
+from html import entities
+from html.parser import HTMLParser
 
 from markupsafe import Markup, escape as escape_quotes
+try:
+    from markupsafe import soft_str as soft_unicode
+except ImportError:
+    from markupsafe import soft_unicode
 
 """Utilities for producing HTML content.
 
@@ -69,7 +73,7 @@ _name2codepoint = entities.name2codepoint.copy()
 _name2codepoint['apos'] = 39  # single quote
 
 
-def escape(str, quotes=True):
+def escape(text, quotes=True):
     """Create a Markup instance from a string and escape special characters
     it may contain (<, >, & and \").
 
@@ -79,62 +83,62 @@ def escape(str, quotes=True):
                    addition to the other special characters
 
     >>> escape('"1 < 2"')
-    Markup(u'&#34;1 &lt; 2&#34;')
+    Markup('&#34;1 &lt; 2&#34;')
 
     >>> escape(['"1 < 2"'])
-    Markup(u"['&#34;1 &lt; 2&#34;']")
+    Markup("['&#34;1 &lt; 2&#34;']")
 
     If the `quotes` parameter is set to `False`, the \" character is left
     as is. Escaping quotes is generally only required for strings that are
     to be used in attribute values.
 
     >>> escape('"1 < 2"', quotes=False)
-    Markup(u'"1 &lt; 2"')
+    Markup('"1 &lt; 2"')
 
     >>> escape(['"1 < 2"'], quotes=False)
-    Markup(u'[\\'"1 &lt; 2"\\']')
+    Markup('[\\'"1 &lt; 2"\\']')
 
     However, `escape` behaves slightly differently with `Markup` and
     `Fragment` behave instances, as they are passed through
     unmodified.
 
     >>> escape(Markup('"1 < 2 &#39;"'))
-    Markup(u'"1 < 2 &#39;"')
+    Markup('"1 < 2 &#39;"')
 
     >>> escape(Markup('"1 < 2 &#39;"'), quotes=False)
-    Markup(u'"1 < 2 &#39;"')
+    Markup('"1 < 2 &#39;"')
 
     >>> escape(tag.b('"1 < 2"'))
-    Markup(u'<b>"1 &lt; 2"</b>')
+    Markup('<b>"1 &lt; 2"</b>')
 
     >>> escape(tag.b('"1 < 2"'), quotes=False)
-    Markup(u'<b>"1 &lt; 2"</b>')
+    Markup('<b>"1 &lt; 2"</b>')
 
     :return: the escaped `Markup` string
     :rtype: `Markup`
 
     """
-    if LazyProxy and isinstance(str, LazyProxy):
-        str = str.value
-    if isinstance(str, Markup):
-        return str
-    if isinstance(str, Fragment):
-        return Markup(str)
-    e = escape_quotes(str)
+    if LazyProxy and isinstance(text, LazyProxy):
+        text = text.value
+    if isinstance(text, Markup):
+        return text
+    if isinstance(text, Fragment):
+        return Markup(text)
+    e = escape_quotes(text)
     if quotes:
         if '&#39;' not in e:
             return e
-        return Markup(unicode(e).replace('&#39;', "'"))
+        return Markup(str(e).replace('&#39;', "'"))
     elif '&#3' not in e:
         return e
-    return Markup(unicode(e).replace('&#34;', '"').replace('&#39;', "'"))
+    return Markup(str(e).replace('&#34;', '"').replace('&#39;', "'"))
 
 
 def unescape(text):
-    """Reverse-escapes &, <, >, and \" and returns a `unicode` object.
+    """Reverse-escapes &, <, >, and \" and returns a `str` object.
 
     >>> unescape(Markup('1 &lt; 2'))
-    u'1 < 2'
+    '1 < 2'
 
     If the provided `text` object is not a `Markup` instance, it is returned
     unchanged.
@@ -144,7 +148,7 @@ def unescape(text):
 
     :param text: the text to unescape
     :return: the unescsaped string
-    :rtype: `unicode`
+    :rtype: `str`
     """
     if not text:
         return ''
@@ -159,24 +163,24 @@ def stripentities(text, keepxmlentities=False):
     replaced by the equivalent UTF-8 characters.
 
     >>> stripentities('1 &lt; 2')
-    u'1 < 2'
+    '1 < 2'
     >>> stripentities('more &hellip;')
-    u'more \u2026'
+    'more \u2026'
     >>> stripentities('&#8230;')
-    u'\u2026'
+    '\u2026'
     >>> stripentities('&#x2026;')
-    u'\u2026'
-    >>> stripentities(Markup(u'\u2026'))
-    u'\u2026'
+    '\u2026'
+    >>> stripentities(Markup('\u2026'))
+    '\u2026'
 
     If the `keepxmlentities` parameter is provided and is a truth value, the
     core XML entities (&amp;, &apos;, &gt;, &lt; and &quot;) are left intact.
 
     >>> stripentities('1 &lt; 2 &hellip;', keepxmlentities=True)
-    u'1 &lt; 2 \u2026'
+    '1 &lt; 2 \u2026'
 
-    :return: a `unicode` instance with entities removed
-    :rtype: `unicode`
+    :return: a `str` instance with entities removed
+    :rtype: `str`
     """
     def _replace_entity(match):
         if match.group(1): # numeric entity
@@ -185,20 +189,20 @@ def stripentities(text, keepxmlentities=False):
                 ref = int(ref[1:], 16)
             else:
                 ref = int(ref, 10)
-            return _unichr(ref)
+            return chr(ref)
         else: # character entity
             ref = match.group(2)
             if keepxmlentities and ref in ('amp', 'apos', 'gt', 'lt', 'quot'):
                 return '&%s;' % ref
             try:
-                return _unichr(_name2codepoint[ref])
+                return chr(_name2codepoint[ref])
             except KeyError:
                 if keepxmlentities:
                     return '&amp;%s;' % ref
                 else:
                     return ref
     if isinstance(text, Markup):
-        text = unicode(text)
+        text = str(text)
     return _STRIPENTITIES_RE.sub(_replace_entity, text)
 
 
@@ -206,20 +210,20 @@ def striptags(text):
     """Return a copy of the text with any XML/HTML tags removed.
 
     >>> striptags('<span>Foo</span> bar')
-    u'Foo bar'
+    'Foo bar'
     >>> striptags('<span class="bar">Foo</span>')
-    u'Foo'
+    'Foo'
     >>> striptags('Foo<br />')
-    u'Foo'
+    'Foo'
 
     HTML/XML comments are stripped, too:
 
     >>> striptags('<!-- <blub>hehe</blah> -->test')
-    u'test'
+    'test'
 
     :param text: the string to remove tags from
-    :return: a `unicode` instance with all tags removed
-    :rtype: `unicode`
+    :return: a `str` instance with all tags removed
+    :rtype: `str`
     """
     return Markup(text).striptags()
 
@@ -288,25 +292,28 @@ def classes(*args, **kwargs):
     positional arguments must be strings:
 
     >>> classes('foo', 'bar')
-    u'foo bar'
+    'foo bar'
 
     In addition, the names of any supplied keyword arguments are added
     if they have a truth value:
 
     >>> classes('foo', bar=True)
-    u'foo bar'
+    'foo bar'
     >>> classes('foo', bar=False)
-    u'foo'
+    'foo'
+    >>> classes(foo=True, bar=True)
+    'bar foo'
 
     If none of the arguments are added to the list, this function
     returns `''`:
 
     >>> classes(bar=False)
-    u''
+    ''
 
     """
-    classes = list(filter(None, args)) + [k for k, v in kwargs.items() if v]
-    return u' '.join(classes)
+    classes = list(filter(None, args))
+    classes.extend(k for k in sorted(kwargs) if kwargs[k])
+    return ' '.join(classes)
 
 def styles(*args, **kwargs):
     """Helper function for dynamically assembling a list of CSS style name
@@ -316,34 +323,35 @@ def styles(*args, **kwargs):
     positional arguments must be strings or dicts:
 
     >>> styles('foo: bar', 'fu: baz', {'bottom-right': '1em'})
-    u'foo: bar; fu: baz; bottom-right: 1em'
+    'foo: bar; fu: baz; bottom-right: 1em'
 
     In addition, the names of any supplied keyword arguments are added
     if they have a string value:
 
-    >>> styles(foo='bar', fu='baz')
-    u'foo: bar; fu: baz'
-    >>> styles(foo='bar', bar=False)
-    u'foo: bar'
+    >>> styles('foo: bar', fu='baz')
+    'foo: bar; fu: baz'
+    >>> styles('foo: bar', bar=False)
+    'foo: bar'
 
     If none of the arguments are added to the list, this function
     returns `''`:
 
     >>> styles(bar=False)
-    u''
+    ''
 
     """
-    args = list(filter(None, args))
     d = {}
     styles = []
-    for arg in args:
+    for arg in filter(None, args):
         if isinstance(arg, dict):
             d.update(arg)
         else:
             styles.append(arg)
     d.update(kwargs)
-    styles.extend('%s: %s' % (k, v) for k, v in d.iteritems() if v)
-    return u'; '.join(styles)
+    styles.extend('%s: %s' % (k, v)
+                  for k, v in sorted(d.items(), key=lambda i: i[0])
+                  if v)
+    return '; '.join(styles)
 
 
 class Fragment(object):
@@ -357,13 +365,10 @@ class Fragment(object):
             self.append(arg)
 
     def __html__(self):
-        return Markup(unicode(self))
-
-    def __unicode__(self):
-        return u''.join(escape(c, False) for c in self.children)
+        return Markup(str(self))
 
     def __str__(self):
-        return self.__unicode__().encode('utf-8')
+        return ''.join(escape(c, False) for c in self.children)
 
     def __add__(self, other):
         return Fragment(self, other)
@@ -376,7 +381,7 @@ class Fragment(object):
     def append(self, arg):
         global genshi
         if arg: # ignore most false values (None, False, [], (), ''), except 0!
-            if isinstance(arg, (Fragment, basestring, int, float, long)):
+            if isinstance(arg, (Fragment, str, bytes, int, float)):
                 self.children.append(arg)
             elif genshi and isinstance(arg, Stream):
                 # legacy support for Genshi streams
@@ -389,10 +394,10 @@ class Fragment(object):
                 except TypeError:
                     self.children.append(arg)
         elif arg == 0:
-            self.children.append(u'0')
+            self.children.append('0')
 
     def as_text(self):
-        return u''.join(c.as_text() if isinstance(c, Fragment) else unicode(c)
+        return ''.join(c.as_text() if isinstance(c, Fragment) else str(c)
                         for c in self.children)
 
     if genshi:
@@ -416,11 +421,11 @@ class XMLElement(Fragment):
 
     VOID_ELEMENTS = ()
 
-    CLOSE_TAG = u'/>'
+    CLOSE_TAG = '/>'
 
     def __init__(self, tag, *args, **kwargs):
         Fragment.__init__(self, *args)
-        self.tag = unicode(tag)
+        self.tag = str(tag)
         self.attrib = self._dict_from_kwargs(kwargs) \
                       if kwargs else self.EMPTY_ATTRIB
 
@@ -429,7 +434,7 @@ class XMLElement(Fragment):
 
     def _dict_from_kwargs(self, kwargs):
         attrs = []
-        for k, v in kwargs.iteritems():
+        for k, v in kwargs.items():
             if v is not None:
                 if k[-1:] == '_':
                     k = k[:-1]
@@ -450,8 +455,8 @@ class XMLElement(Fragment):
             self.append(arg)
         return self
 
-    def __unicode__(self):
-        elt = u'<' + self.tag
+    def __str__(self):
+        elt = '<' + self.tag
         if self.attrib:
             # Sorting the attributes makes the unit-tests more robust
             attrs = []
@@ -460,10 +465,10 @@ class XMLElement(Fragment):
                 if v:
                     attrs.append(' %s="%s"' % (k, v))
             if attrs:
-                elt += u''.join(attrs)
+                elt += ''.join(attrs)
         if self.children or (self.VOID_ELEMENTS and
                              self.tag not in self.VOID_ELEMENTS):
-            elt += u'>' + Fragment.__unicode__(self) + u'</' + self.tag + u'>'
+            elt += '>' + Fragment.__str__(self) + '</' + self.tag + '>'
         else:
             elt += self.CLOSE_TAG
         return elt
@@ -481,7 +486,7 @@ class Element(XMLElement):
     VOID_ELEMENTS = {'area', 'base', 'br', 'col', 'command', 'embed', 'hr',
                      'img', 'input', 'keygen', 'link', 'meta', 'param',
                      'source', 'track', 'wbr'}
-    CLOSE_TAG = u' />'
+    CLOSE_TAG = ' />'
 
     __slots__ = ()
 
@@ -618,25 +623,25 @@ class TracHTMLSanitizer(object):
 
     # IE6 <http://heideri.ch/jso/#80>
     _EXPRESSION_SEARCH = re.compile(
-        u'[eE\uFF25\uFF45]'         # FULLWIDTH LATIN CAPITAL LETTER E
+        '[eE\uFF25\uFF45]'         # FULLWIDTH LATIN CAPITAL LETTER E
                                     # FULLWIDTH LATIN SMALL LETTER E
-        u'[xX\uFF38\uFF58]'         # FULLWIDTH LATIN CAPITAL LETTER X
+        '[xX\uFF38\uFF58]'         # FULLWIDTH LATIN CAPITAL LETTER X
                                     # FULLWIDTH LATIN SMALL LETTER X
-        u'[pP\uFF30\uFF50]'         # FULLWIDTH LATIN CAPITAL LETTER P
+        '[pP\uFF30\uFF50]'         # FULLWIDTH LATIN CAPITAL LETTER P
                                     # FULLWIDTH LATIN SMALL LETTER P
-        u'[rR\u0280\uFF32\uFF52]'   # LATIN LETTER SMALL CAPITAL R
+        '[rR\u0280\uFF32\uFF52]'   # LATIN LETTER SMALL CAPITAL R
                                     # FULLWIDTH LATIN CAPITAL LETTER R
                                     # FULLWIDTH LATIN SMALL LETTER R
-        u'[eE\uFF25\uFF45]'         # FULLWIDTH LATIN CAPITAL LETTER E
+        '[eE\uFF25\uFF45]'         # FULLWIDTH LATIN CAPITAL LETTER E
                                     # FULLWIDTH LATIN SMALL LETTER E
-        u'[sS\uFF33\uFF53]{2}'      # FULLWIDTH LATIN CAPITAL LETTER S
+        '[sS\uFF33\uFF53]{2}'      # FULLWIDTH LATIN CAPITAL LETTER S
                                     # FULLWIDTH LATIN SMALL LETTER S
-        u'[iI\u026A\uFF29\uFF49]'   # LATIN LETTER SMALL CAPITAL I
+        '[iI\u026A\uFF29\uFF49]'   # LATIN LETTER SMALL CAPITAL I
                                     # FULLWIDTH LATIN CAPITAL LETTER I
                                     # FULLWIDTH LATIN SMALL LETTER I
-        u'[oO\uFF2F\uFF4F]'         # FULLWIDTH LATIN CAPITAL LETTER O
+        '[oO\uFF2F\uFF4F]'         # FULLWIDTH LATIN CAPITAL LETTER O
                                     # FULLWIDTH LATIN SMALL LETTER O
-        u'[nN\u0274\uFF2E\uFF4E]'   # LATIN LETTER SMALL CAPITAL N
+        '[nN\u0274\uFF2E\uFF4E]'   # LATIN LETTER SMALL CAPITAL N
                                     # FULLWIDTH LATIN CAPITAL LETTER N
                                     # FULLWIDTH LATIN SMALL LETTER N
     ).search
@@ -644,14 +649,14 @@ class TracHTMLSanitizer(object):
     # IE6 <http://openmya.hacker.jp/hasegawa/security/expression.txt>
     #     7) Particular bit of Unicode characters
     _URL_FINDITER = re.compile(
-        u'[Uu][Rr\u0280][Ll\u029F]\s*\(([^)]+)').finditer
+        '[Uu][Rr\u0280][Ll\u029F]\\s*\\(([^)]+)').finditer
 
     def sanitize(self, html):
         """Transforms the incoming HTML by removing anything's that deemed
         unsafe.
 
         :param html: the input HTML
-        :type: basestring
+        :type: str
         :return: the sanitized content
         :rtype: Markup
 
@@ -681,7 +686,7 @@ class TracHTMLSanitizer(object):
                         waiting_for = tag
                         continue
                     new_attrs = self.sanitize_attrs(tag, dict(attrs))
-                    yield kind, (tag, Attrs(new_attrs.iteritems())), pos
+                    yield kind, (tag, Attrs(iter(new_attrs.items()))), pos
 
                 elif kind is END:
                     tag = data
@@ -715,9 +720,9 @@ class TracHTMLSanitizer(object):
         inclusion in the output.
 
         :param tag: the tag name of the element
-        :type tag: QName or basestring
+        :type tag: str
         :param attrs: the element attributes
-        :type attrs: Attrs or list
+        :type attrs: list
         :return: whether the element should be considered safe
         :rtype: bool
 
@@ -773,7 +778,7 @@ class TracHTMLSanitizer(object):
 
         """
         new_attrs = {}
-        for attr, value in attrs.iteritems():
+        for attr, value in attrs.items():
             if value is None:
                 value = attr
             if attr not in self.safe_attrs:
@@ -804,23 +809,23 @@ class TracHTMLSanitizer(object):
         with a scheme that is not considered safe are removed:
 
         >>> sanitizer = TracHTMLSanitizer()
-        >>> sanitizer.sanitize_css(u'''
+        >>> sanitizer.sanitize_css('''
         ...   background: url(javascript:alert("foo"));
         ...   color: #000;
         ... ''')
-        [u'color: #000']
+        ['color: #000']
 
         Also, the proprietary Internet Explorer function
         ``expression()`` is always stripped:
 
-        >>> sanitizer.sanitize_css(u'''
+        >>> sanitizer.sanitize_css('''
         ...   background: #fff;
         ...   color: #000;
         ...   width: e/**/xpression(alert("F"));
         ... ''')
-        [u'background: #fff', u'color: #000', u'width: e xpression(alert("F"))']
+        ['background: #fff', 'color: #000', 'width: e xpression(alert("F"))']
 
-        :param text: the CSS text; this is expected to be `unicode` and to not
+        :param text: the CSS text; this is expected to be `str` and to not
                      contain any character or numeric references
         :return: a list of declarations that are considered safe
         :rtype: `list`
@@ -858,14 +863,14 @@ class TracHTMLSanitizer(object):
             t = match.group(1)
             if t:
                 code = int(t, 16)
-                chr = _unichr(code)
+                c = chr(code)
                 if code <= 0x1f:
                     # replace space character because IE ignores control
                     # characters
-                    chr = ' '
-                elif chr == '\\':
-                    chr = r'\\'
-                return chr
+                    c = ' '
+                elif c == '\\':
+                    c = r'\\'
+                return c
             t = match.group(2)
             if t == '\\':
                 return r'\\'
@@ -932,7 +937,7 @@ class HTMLTransform(HTMLParser):
                                       if isinstance(v, bytes) else v
         elif isinstance(out, io.IOBase):
             self._convert = lambda v: v.encode('utf-8') \
-                                      if isinstance(v, unicode) else v
+                                      if isinstance(v, str) else v
         else:
             self._convert = lambda v: v
 
@@ -1028,8 +1033,8 @@ class HTMLSanitization(HTMLTransform):
             return
 
         new_attrs = self.sanitizer.sanitize_attrs(tag, dict(attrs))
-        html_attrs = ''.join(' %s="%s"' % (name, escape(value))
-                             for name, value in new_attrs.iteritems())
+        html_attrs = ''.join(' %s="%s"' % (name, escape(new_attrs[name]))
+                             for name in sorted(new_attrs))
         self._write('<%s%s%s>' % (tag, html_attrs, startend))
 
     def handle_starttag(self, tag, attrs):
@@ -1075,15 +1080,15 @@ def plaintext(text, keeplinebreaks=True):
     """Extract the text elements from (X)HTML content
 
     >>> plaintext('<b>1 &lt; 2</b>')
-    u'1 < 2'
+    '1 < 2'
 
     >>> plaintext(tag('1 ', tag.b('<'), ' 2'))
-    u'1 < 2'
+    '1 < 2'
 
     >>> plaintext('''<b>1
     ... &lt;
     ... 2</b>''', keeplinebreaks=False)
-    u'1 < 2'
+    '1 < 2'
 
     :param text: `unicode` or `Fragment`
     :param keeplinebreaks: optionally keep linebreaks
@@ -1096,7 +1101,7 @@ def plaintext(text, keeplinebreaks=True):
     else:
         text = stripentities(striptags(text))
     if not keeplinebreaks:
-        text = text.replace(u'\n', u' ')
+        text = text.replace('\n', ' ')
     return text
 
 
@@ -1163,20 +1168,28 @@ def to_fragment(input):
 
 
 # Mappings for removal of control characters
-_translate_nop = ''.join(chr(i) for i in xrange(256))
-_invalid_control_chars = ''.join(chr(i) for i in xrange(32)
-                                 if i not in [0x09, 0x0a, 0x0d])
+_invalid_control_chars = bytes(i for i in range(32)
+                                 if i not in (0x09, 0x0a, 0x0d))
 
-def valid_html_bytes(bytes):
-    return bytes.translate(_translate_nop, _invalid_control_chars)
+def valid_html_bytes(data):
+    """Return only valid bytes in XML/HTML from the given data.
+
+    >>> valid_html_bytes(b'blah')
+    b'blah'
+
+    >>> list(valid_html_bytes(bytes(range(33)) + b'\x7F'))
+    [9, 10, 13, 32, 127]
+
+    """
+    return data.translate(None, _invalid_control_chars)
 
 
 if sys.maxunicode > 0xffff:
-    _unichr = unichr
+    _unichr = chr
 else:
     def _unichr(codepoint):  # narrow Python build
         try:
-            return unichr(codepoint)
+            return chr(codepoint)
         except ValueError:
             if not (0 <= codepoint <= 0x10ffff):
                 raise
@@ -1254,7 +1267,7 @@ if genshi:
 
 
     def HTML(text, encoding=None):
-        if isinstance(text, unicode):
+        if isinstance(text, str):
             f = io.StringIO(text)
             encoding = None
         else:
